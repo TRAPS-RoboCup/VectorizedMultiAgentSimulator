@@ -1,6 +1,8 @@
 #  Copyright (c) 2022-2024.
 #  ProrokLab (https://www.proroklab.org/)
 #  All rights reserved.
+import typing
+from typing import List
 
 import math
 import operator
@@ -10,9 +12,12 @@ import torch
 
 from vmas import render_interactively
 from vmas.simulator.core import Agent, Box, Landmark, Line, Sphere, World
+from vmas.simulator.dynamics.holonomic_with_rot import HolonomicWithRotation
 from vmas.simulator.scenario import BaseScenario
 from vmas.simulator.utils import Color, X, Y
 
+if typing.TYPE_CHECKING:
+    from vmas.simulator.rendering import Geom
 
 class Scenario(BaseScenario):
     def make_world(self, batch_dim: int, device: torch.device, **kwargs):
@@ -41,11 +46,11 @@ class Scenario(BaseScenario):
 
     def init_params(self, **kwargs):
         self.viewer_size = kwargs.get("viewer_size", (1200, 800))
-        self.ai_red_agents = kwargs.get("ai_red_agents", True)
+        self.ai_red_agents = kwargs.get("ai_red_agents", False)
         self.ai_blue_agents = kwargs.get("ai_blue_agents", False)
         self.n_blue_agents = kwargs.get("n_blue_agents", 3)
         self.n_red_agents = kwargs.get("n_red_agents", 3)
-        self.agent_size = kwargs.get("agent_size", 0.025)
+        self.agent_size = kwargs.get("agent_size", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
         self.pitch_length = kwargs.get("pitch_length", 3.0)
@@ -82,13 +87,25 @@ class Scenario(BaseScenario):
 
         blue_agents = []
         for i in range(self.n_blue_agents):
+            # agent = Agent(
+            #     name=f"agent_blue_{i}",
+            #     shape=Sphere(radius=self.agent_size),
+            #     action_script=self.blue_controller.run if self.ai_blue_agents else None,
+            #     u_multiplier=self.u_multiplier,
+            #     max_speed=self.max_speed,
+            #     render_action=True,
+            #     color=Color.BLUE
+            # )
             agent = Agent(
-                name=f"agent_blue_{i}",
-                shape=Sphere(radius=self.agent_size),
-                action_script=self.blue_controller.run if self.ai_blue_agents else None,
-                u_multiplier=self.u_multiplier,
-                max_speed=self.max_speed,
-                color=Color.BLUE,
+                    name=f"agent_blue_{i}",
+                    shape=Sphere(radius=self.agent_size),
+                    # action_script=self.blue_controller.run if self.ai_blue_agents else None,
+                    color=Color.BLUE,
+                    render_action=True,
+                    max_speed=self.max_speed,
+                    u_range=[1, 1, 1],
+                    u_multiplier=[0.05, 0.05, 0.001],
+                    dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
             blue_agents.append(agent)
@@ -101,6 +118,7 @@ class Scenario(BaseScenario):
                 action_script=self.red_controller.run if self.ai_red_agents else None,
                 u_multiplier=self.u_multiplier,
                 max_speed=self.max_speed,
+                render_action=True,
                 color=Color.RED,
             )
             world.add_agent(agent)
@@ -136,6 +154,15 @@ class Scenario(BaseScenario):
                 torch.zeros(2, device=self.world.device),
                 batch_index=env_index,
             )
+            agent.set_rot(
+                torch.tensor(
+                    0,
+                    dtype=torch.float32,
+                    device=self.world.device,
+                ),
+                batch_index=env_index,
+            )
+        
         for agent in self.red_agents:
             agent.set_pos(
                 torch.rand(
@@ -155,6 +182,14 @@ class Scenario(BaseScenario):
             )
             agent.set_vel(
                 torch.zeros(2, device=self.world.device),
+                batch_index=env_index,
+            )
+            agent.set_rot(
+                torch.tensor(
+                    0,
+                    dtype=torch.float32,
+                    device=self.world.device,
+                ),
                 batch_index=env_index,
             )
 
@@ -177,6 +212,7 @@ class Scenario(BaseScenario):
             max_speed=self.ball_max_speed,
             mass=self.ball_mass,
             color=Color.GRAY,
+            # dribble=False
         )
         world.add_agent(ball)
         world.ball = ball
@@ -194,32 +230,32 @@ class Scenario(BaseScenario):
 
     def init_background(self, world):
         # Add landmarks
-        background = Landmark(
-            name="Background",
-            collide=False,
-            movable=False,
-            shape=Box(length=self.pitch_length, width=self.pitch_width),
-            color=Color.GREEN,
-        )
-        world.add_landmark(background)
+        # background = Landmark(
+        #     name="Background",
+        #     collide=False,
+        #     movable=False,
+        #     shape=Box(length=self.pitch_length, width=self.pitch_width),
+        #     color=Color.GREEN,
+        # )
+        # world.add_landmark(background)
 
-        centre_circle_outer = Landmark(
-            name="Centre Circle Outer",
-            collide=False,
-            movable=False,
-            shape=Sphere(radius=self.goal_size / 2),
-            color=Color.WHITE,
-        )
-        world.add_landmark(centre_circle_outer)
+        # centre_circle_outer = Landmark(
+        #     name="Centre Circle Outer",
+        #     collide=False,
+        #     movable=False,
+        #     shape=Sphere(radius=self.goal_size / 2),
+        #     color=Color.WHITE,
+        # )
+        # world.add_landmark(centre_circle_outer)
 
-        centre_circle_inner = Landmark(
-            name="Centre Circle Inner",
-            collide=False,
-            movable=False,
-            shape=Sphere(self.goal_size / 2 - 0.02),
-            color=Color.GREEN,
-        )
-        world.add_landmark(centre_circle_inner)
+        # centre_circle_inner = Landmark(
+        #     name="Centre Circle Inner",
+        #     collide=False,
+        #     movable=False,
+        #     shape=Sphere(self.goal_size / 2 - 0.02),
+        #     color=Color.GREEN,
+        # )
+        # world.add_landmark(centre_circle_inner)
 
         centre_line = Landmark(
             name="Centre Line",
@@ -739,9 +775,41 @@ class Scenario(BaseScenario):
         return self._done
 
 
+    def extra_render(self, env_index: int = 0) -> "List[Geom]":
+        from vmas.simulator import rendering
+
+        geoms: List[Geom] = []
+        # Agent rotation
+        for i, agent in enumerate(self.world.agents):
+            if "agent" in agent.name and agent.name != "Ball":
+                color = Color.BLACK.value
+                line = rendering.Line(
+                    (0, 0),
+                    (0.1, 0),
+                    width=1,
+                )
+                xform = rendering.Transform()
+                xform.set_rotation(agent.state.rot[env_index])
+                xform.set_translation(*agent.state.pos[env_index])
+                line.add_attr(xform)
+                line.set_color(*color)
+                geoms.append(line)
+            else:
+                pass
+
+        # Trajectory goal circle
+        color = Color.BLACK.value
+        # shape=Sphere(radius=self.goal_size / 2),
+        circle = rendering.make_circle(self.goal_size / 2, filled=False)
+        xform = rendering.Transform()
+        circle.add_attr(xform)
+        xform.set_translation(0, 0)
+        circle.set_color(*color)
+        geoms.append(circle)
+
+        return geoms
+
 # Ball Physics
-
-
 def ball_action_script(ball, world):
     # Avoid getting stuck against the wall
     dist_thres = world.agent_size * 2
@@ -801,9 +869,48 @@ def ball_action_script(ball, world):
     goal_mask = (ball.state.pos[:, 1] < world.goal_size / 2) * (
         ball.state.pos[:, 1] > -world.goal_size / 2
     )
+    ball_dribbled_action(ball, world)
     actions[goal_mask, 0] = 0
     ball.action.u = actions
 
+def ball_dribbled_action(ball, world):
+    agent_dist = 0.1
+    dribblable_vel_threshold = 0.1
+    inner_product_threshold = 0.9
+    # print("ball.dribble",ball.dribble)
+    for i, agent in enumerate(world.agents):
+        if "agent" in agent.name and agent.name != "Ball":
+            # calculate the vector of the agent's rotation
+            rot_vector_x = agent_dist * torch.cos(torch.tensor(agent.state.rot))
+            rot_vector_y = agent_dist * torch.sin(torch.tensor(agent.state.rot))
+            rot_vector = torch.tensor([rot_vector_x, rot_vector_y])
+            
+            # ball position and velocity relative to the agent
+            ball_pos_vector = torch.tensor(ball.state.pos) - torch.tensor(agent.state.pos)
+            ball_vel = torch.tensor(ball.state.vel) - torch.tensor(agent.state.vel)
+
+            # calculate the inner product of the ball position and the agent's rotation vector
+            # TODO check it is correct. squeeze() procceeds may be problem for vectorlised env.
+            inner_product = torch.dot(ball_pos_vector.squeeze(), rot_vector) / (torch.norm(ball_pos_vector) * torch.norm(rot_vector))
+            
+            # for debugging agent_blue_1
+            if "agent_blue_1" in agent.name:
+                print(f"Inner product: {inner_product}")
+                print(f"ball_pos_vector: {torch.norm(ball_pos_vector)}")
+                print(f"ball_vel: {torch.norm(ball_vel)}")
+            
+            # consider the ball dribbled if the inner product is greater than the threshold and the ball is slow enough
+            if inner_product >= inner_product_threshold and \
+                    torch.norm(ball_vel) <= dribblable_vel_threshold and \
+                    torch.norm(ball_pos_vector) <= agent_dist:         
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                # agent dribble the ball
+                ball.state.vel = agent.state.vel
+                ball.state.pos = agent.state.pos + rot_vector       
+            else:
+                continue
+        else:
+            continue
 
 # Agent Policy
 
@@ -1693,15 +1800,14 @@ class AgentPolicy:
         can_pass_mask = within_range_mask & within_angle_mask
         return can_pass_mask
 
-
 # Run
 if __name__ == "__main__":
     render_interactively(
         __file__,
         control_two_agents=True,
         continuous=True,
-        n_blue_agents=2,
-        n_red_agents=2,
+        n_blue_agents=3,
+        n_red_agents=3,
         ai_red_agents=True,
         ai_blue_agents=False,
         dense_reward_ratio=0.001,
