@@ -861,6 +861,7 @@ class Agent(Entity):
         render_action: bool = False,
         dynamics: Dynamics = None,  # Defaults to holonomic
         action_size: int = None,  # Defaults to what required by the dynamics
+        dribble: bool = False,
     ):
         super().__init__(
             name,
@@ -927,6 +928,10 @@ class Agent(Entity):
         # state
         self._state = AgentState()
 
+
+        # dribble flag
+        self._dribble = dribble
+
     def add_sensor(self, sensor: Sensor):
         sensor.agent = self
         self._sensors.append(sensor)
@@ -952,7 +957,6 @@ class Agent(Entity):
         assert (
             self._action.u.shape[1] == world.dim_p
         ), f"Scripted physical action of agent {self.name} has wrong shape"
-
         assert (
             (self._action.u / self.action.u_multiplier_tensor).abs()
             <= self.action.u_range_tensor
@@ -1009,6 +1013,15 @@ class Agent(Entity):
     @property
     def adversary(self):
         return self._adversary
+
+    @property
+    def dribble(self):
+        return self._dribble
+    
+    @dribble.setter
+    def dribble(self, value):
+        self._dribble = value
+
 
     @override(Entity)
     def _spawn(self, dim_c: int, dim_p: int):
