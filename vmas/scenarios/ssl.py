@@ -162,6 +162,14 @@ class Scenario(BaseScenario):
                 ),
                 batch_index=env_index,
             )
+            agent.set_ang_vel(
+                torch.tensor(
+                    0,
+                    dtype=torch.float32,
+                    device=self.world.device,
+                ),
+                batch_index=env_index,
+            )
         
         for agent in self.red_agents:
             agent.set_pos(
@@ -192,7 +200,14 @@ class Scenario(BaseScenario):
                 ),
                 batch_index=env_index,
             )
-
+            agent.set_ang_vel(
+                torch.tensor(
+                    0,
+                    dtype=torch.float32,
+                    device=self.world.device,
+                ),
+                batch_index=env_index,
+            )
     def reset_controllers(self, env_index: int = None):
         if self.red_controller is not None:
             if not self.red_controller.initialised:
@@ -212,7 +227,7 @@ class Scenario(BaseScenario):
             max_speed=self.ball_max_speed,
             mass=self.ball_mass,
             color=Color.GRAY,
-            # dribble=False
+            dribble=False
         )
         world.add_agent(ball)
         world.ball = ball
@@ -227,6 +242,7 @@ class Scenario(BaseScenario):
             torch.zeros(2, device=self.world.device),
             batch_index=env_index,
         )
+        self.ball.dribble = False
 
     def init_background(self, world):
         # Add landmarks
@@ -809,6 +825,7 @@ class Scenario(BaseScenario):
 
         return geoms
 
+
 # Ball Physics
 def ball_action_script(ball, world):
     # Avoid getting stuck against the wall
@@ -874,10 +891,13 @@ def ball_action_script(ball, world):
     ball.action.u = actions
 
 def ball_dribbled_action(ball, world):
-    agent_dist = 0.1
+    agent_dist = 0.08 #!bug: if you change to 0.07. the ball is inverse push to the agent.
     dribblable_vel_threshold = 0.1
     inner_product_threshold = 0.9
-    # print("ball.dribble",ball.dribble)
+    angular_velocity_threshold = 1
+    release_attenuation = 0.1
+
+    print("ball.dribble",ball.dribble)
     for i, agent in enumerate(world.agents):
         if "agent" in agent.name and agent.name != "Ball":
             # calculate the vector of the agent's rotation
@@ -890,27 +910,51 @@ def ball_dribbled_action(ball, world):
             ball_vel = torch.tensor(ball.state.vel) - torch.tensor(agent.state.vel)
 
             # calculate the inner product of the ball position and the agent's rotation vector
-            # TODO check it is correct. squeeze() procceeds may be problem for vectorlised env.
             inner_product = torch.dot(ball_pos_vector.squeeze(), rot_vector) / (torch.norm(ball_pos_vector) * torch.norm(rot_vector))
-            
-            # for debugging agent_blue_1
-            if "agent_blue_1" in agent.name:
-                print(f"Inner product: {inner_product}")
-                print(f"ball_pos_vector: {torch.norm(ball_pos_vector)}")
-                print(f"ball_vel: {torch.norm(ball_vel)}")
             
             # consider the ball dribbled if the inner product is greater than the threshold and the ball is slow enough
             if inner_product >= inner_product_threshold and \
                     torch.norm(ball_vel) <= dribblable_vel_threshold and \
-                    torch.norm(ball_pos_vector) <= agent_dist:         
-                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    torch.norm(ball_pos_vector) <= agent_dist:
                 # agent dribble the ball
-                ball.state.vel = agent.state.vel
-                ball.state.pos = agent.state.pos + rot_vector       
+                ball.dribble = True
+                world.dribbler_index = i
             else:
                 continue
         else:
             continue
+    # if the ball is over some threshold(agent.state.vel and agent.state.ang_vel),
+    # agent can't dribble the ball.
+    if ball.dribble:
+        dribble_agent = world.agents[world.dribbler_index]
+        rot_vector = rotate_vector(torch.tensor([agent_dist, 0.0]), dribble_agent.state.rot)
+        # ball.state.vel = dribble_agent.state.vel
+        ball.state.vel = dribble_agent.state.vel.clone()
+        ball.state.pos = dribble_agent.state.pos + rot_vector
+        if torch.norm(ball.state.vel) > dribblable_vel_threshold:
+            ball.dribble = False
+        if torch.norm(dribble_agent.state.ang_vel) > angular_velocity_threshold:
+            angular_velaocity_effect = torch.tensor([dribble_agent.state.ang_vel * -torch.sin(dribble_agent.state.rot),
+                                                      dribble_agent.state.ang_vel * torch.cos(dribble_agent.state.rot)])
+            ball.state.vel += angular_velaocity_effect * release_attenuation
+            ball.dribble = False
+
+def rotate_vector(vector: torch.Tensor, theta: float) -> torch.Tensor:
+    """
+    for rotate
+    
+    :param vector: vector
+    :param theta: rad
+    :return: rotaed_vector
+    """
+    rotation_matrix = torch.tensor([
+        [torch.cos(theta), -torch.sin(theta)],
+        [torch.sin(theta), torch.cos(theta)]
+    ])
+    
+    rotated_vector = torch.matmul(rotation_matrix, vector)
+    
+    return rotated_vector
 
 # Agent Policy
 
