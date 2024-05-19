@@ -32,6 +32,7 @@ scenarios = sorted(
         "football",
         "discovery",
         "flocking",
+        "dribble",
         "passage",
         "joint_passage_size",
         "joint_passage",
