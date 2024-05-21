@@ -946,143 +946,57 @@ def ball_action_script(ball, world):
     ball.action.u = actions
 
 def ball_dribbled_action(ball, world):
-    agent_ball_dist_threshold = torch.tensor([0.5],device=world.device) #!Bug: if you change to 0.1. the ball is inverse push to the agent.
-    relative_vel_threshold = torch.tensor([0.1],device=world.device)
-    dribbled_ball_vel_threshold = torch.tensor([0.1],device=world.device)
-    inner_product_threshold = torch.tensor([0.01],device=world.device)
-    angular_vel_threshold = torch.tensor([1],device=world.device)
-    release_attenuation = torch.tensor([0.1],device=world.device)
+    agent_dist = 0.08 #!Bug: if you change to 0.07. the ball is inverse push to the agent.
+    dribblable_vel_threshold = 0.1
+    inner_product_threshold = 0.9
+    angular_velocity_threshold = 1
+    release_attenuation = 0.1
+    for env_index in range(world.batch_dim):
+        for i, agent in enumerate(world.agents):
+            if "agent" in agent.name and agent.name != "Ball":
+                # calculate the vector of the agent's rotation
+                rot_vector_x = agent_dist * torch.cos(agent.state.rot[env_index].clone().detach())
+                rot_vector_y = agent_dist * torch.sin(agent.state.rot[env_index].clone().detach())
 
-    for i, agent in enumerate(world.agents):
-        
-        if "agent" in agent.name and agent.name != "Ball":
-            # calculate the vector of the agent's rotation
-            rot_vector_x = agent_ball_dist_threshold * torch.cos(agent.state.rot.clone().detach())
-            rot_vector_y = agent_ball_dist_threshold * torch.sin(agent.state.rot.clone().detach())
-            rot_vector = torch.hstack([rot_vector_x, rot_vector_y])
-            
-            # ball position and velocity relative to the agent
-            ball_pos_vector = ball.state.pos - agent.state.pos
-            relative_vel = ball.state.vel - agent.state.vel
-            
-            # calculate the inner product of the ball position and the agent's rotation vector
-            inner_product =  torch.einsum('ij,ij->i', ball_pos_vector, rot_vector) \
-                                / (torch.norm(ball_pos_vector) * torch.norm(rot_vector))
-            # print(inner_product)
+                rot_vector = torch.tensor([rot_vector_x, rot_vector_y], device=world.device)
 
-            # consider the ball dribbled if the inner product is greater than the threshold and the ball is slow enough
-            condition_inner_prodact = inner_product >= inner_product_threshold
-            condition_relative_vel = torch.norm(relative_vel) <= relative_vel_threshold
-            condition_ball_vel = torch.norm(ball.state.vel) <= dribbled_ball_vel_threshold
-            condition_agent_ball_distance = torch.norm(ball_pos_vector) <= agent_ball_dist_threshold
-            
-            # conditions_met = (condition_inner_prodact & condition_relative_vel & 
-            #                 condition_ball_vel & condition_agent_ball_distance)
-            
-            conditions_met = condition_agent_ball_distance
-            agent.state.dribble = torch.where(conditions_met, torch.tensor([True],device=world.device), torch.tensor([False],device=world.device))
-            
-            dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=world.device))[0]
-            print(conditions_met)
-            if dribble_env_indices.shape[0] > 0:
-                agent.state.dribble[dribble_env_indices], \
-                ball.state.pos[dribble_env_indices], \
-                ball.state.vel[dribble_env_indices] = ball_dribbled_moving(world,
-                                                                            agent.state.pos[dribble_env_indices],
-                                                                            agent.state.vel[dribble_env_indices],
-                                                                            agent.state.rot[dribble_env_indices],
-                                                                            agent.state.ang_vel[dribble_env_indices],
-                                                                            agent.state.dribble[dribble_env_indices], 
-                                                                            ball.state.pos[dribble_env_indices],
-                                                                            ball.state.vel[dribble_env_indices],
-                                                                            agent_ball_dist_threshold,
-                                                                            dribbled_ball_vel_threshold,
-                                                                            angular_vel_threshold,
-                                                                            release_attenuation)
+                ball_pos_vector = ball.state.pos[env_index].clone().detach() - \
+                                agent.state.pos[env_index].clone().detach()
 
-            # if world.batch_dim == 1:
-            #     # if the ball is over some threshold(agent.state.vel and agent.state.ang_vel),
-            #     # agent can't dribble the ball.
-            #     if agent.state.dribble:
-            #         # calculate the vector of the agent's rotation. 0.02 is for "if" proccess of the ball is under distance threathold.
-            #         rot_vector = rotate_vector(torch.tensor([agent_ball_dist_threshold-0.02, 0.0]), agent.state.rot)
-            #         ball.state.vel = agent.state.vel.clone()
-            #         ball.state.pos = agent.state.pos + rot_vector
+                relative_vel = ball.state.vel[env_index].clone().detach() - \
+                            agent.state.vel[env_index].clone().detach()
+                # calculate the inner product of the ball position and the agent's rotation vector
+                inner_product = torch.dot(ball_pos_vector.squeeze(), rot_vector) / (torch.norm(ball_pos_vector) * torch.norm(rot_vector))
+                
+                # consider the ball dribbled if the inner product is greater than the threshold and the ball is slow enough
+                if inner_product >= inner_product_threshold and \
+                    torch.norm(relative_vel) <= dribblable_vel_threshold and \
+                    torch.norm(ball_pos_vector) <= agent_dist:
+                    # agent dribble the ball
+                    agent.state.dribble[env_index] = True
+                # if the ball is over some threshold(agent.state.vel and agent.state.ang_vel),
+                # agent can't dribble the ball.
+                if agent.state.dribble[env_index]:
+                    rot_vector = rotate_vector(torch.tensor([agent_dist, 0.0], device=world.device), agent.state.rot[env_index])
+                    ball.state.vel[env_index] = agent.state.vel[env_index].clone()
+                    ball.state.pos[env_index] = agent.state.pos[env_index] + rot_vector
+                    if torch.norm(ball.state.vel[env_index]) > dribblable_vel_threshold:
+                        agent.state.dribble[env_index] = False
+                    if torch.norm(agent.state.ang_vel[env_index]) > angular_velocity_threshold:
+                        angular_velaocity_effect = torch.tensor([agent.state.ang_vel[env_index] * -torch.sin(agent.state.rot[env_index]),
+                                                                agent.state.ang_vel[env_index] * torch.cos(agent.state.rot[env_index])],
+                                                                device=world.device)
+                        ball.state.vel[env_index] += angular_velaocity_effect * release_attenuation
+                        agent.state.dribble[env_index]= False
 
-            #         if torch.norm(ball.state.vel) > dribbled_ball_vel_threshold:
-            #             agent.state.dribble = torch.tensor([False])
-            #             rot_vector = rotate_vector(torch.tensor([agent_ball_dist_threshold+0.03, 0.0]), agent.state.rot)
-            #             ball.state.vel = agent.state.vel.clone()
-            #             ball.state.pos = agent.state.pos + rot_vector
-                        
-            #         if torch.norm(agent.state.ang_vel) > angular_vel_threshold:
-            #             agent.state.dribble = torch.tensor([False])
-            #             angular_velaocity_effect = torch.tensor([agent.state.ang_vel * -torch.sin(agent.state.rot),
-            #                                                     agent.state.ang_vel * torch.cos(agent.state.rot)])
-            #             ball.state.vel += angular_velaocity_effect * release_attenuation
-            # else:
-            #     # if the ball is over some threshold(agent.state.vel and agent.state.ang_vel),
-            #     # agent can't dribble the ball.
-            #     if agent.state.dribble[i]:
-            #         # calculate the vector of the agent's rotation. 0.02 is for "if" proccess of the ball is under distance threathold.
-            #         rot_vector = rotate_vector(torch.tensor([agent_ball_dist_threshold-0.02, 0.0]), agent.state.rot)
-            #         ball.state.vel = agent.state.vel.clone()
-            #         ball.state.pos = agent.state.pos + rot_vector
-
-            #         if torch.norm(ball.state.vel) > dribbled_ball_vel_threshold:
-            #             agent.state.dribble = torch.tensor([False])
-            #             rot_vector = rotate_vector(torch.tensor([agent_ball_dist_threshold+0.03, 0.0]), agent.state.rot)
-            #             ball.state.vel = agent.state.vel.clone()
-            #             ball.state.pos = agent.state.pos + rot_vector
-                        
-            #         if torch.norm(agent.state.ang_vel) > angular_vel_threshold:
-            #             agent.state.dribble = torch.tensor([False])
-            #             angular_velaocity_effect = torch.tensor([agent.state.ang_vel * -torch.sin(agent.state.rot),
-            #                                                     agent.state.ang_vel * torch.cos(agent.state.rot)])
-            #             ball.state.vel += angular_velaocity_effect * release_attenuation
-
-        else:
-            continue
-
-
-def ball_dribbled_moving(world,agent_pos, agent_vel, agent_rot, agent_ang_vel, agent_dribble, 
-                        ball_pos, ball_vel, 
-                        agent_ball_dist_threshold, dribbled_ball_vel_threshold, angular_vel_threshold, release_attenuation):
-    # calculate the vector of the agent's rotation. 0.02 is for "if" proccess of the ball is under distance threathold.
-    zero_tensor = torch.tensor([0.0]).to(world.device)
-    
-    rot_vector = rotate_vector(world, torch.tensor([agent_ball_dist_threshold-0.02, zero_tensor]), agent_rot)
-    # import ipdb; ipdb.set_trace()
-    ball_pos = agent_pos + rot_vector
-
-    if torch.norm(ball_vel) > dribbled_ball_vel_threshold:
-        agent_dribble = torch.tensor([False])
-        rot_vector = rotate_vector(world, torch.tensor([agent_ball_dist_threshold+0.03, zero_tensor]), agent_rot)
-        ball_vel = agent_vel.clone()
-        ball_pos = agent_pos + rot_vector
-        
-    if torch.norm(agent_ang_vel) > angular_vel_threshold:
-        agent_dribble = torch.tensor([False])
-        angular_velaocity_effect = torch.tensor([agent_ang_vel * -torch.sin(agent_rot),
-                                                agent_ang_vel * torch.cos(agent_rot)],device=world.device)
-        ball_vel += angular_velaocity_effect * release_attenuation
-    return agent_dribble, ball_pos, ball_vel
-
-def rotate_vector(world, vector: torch.Tensor, theta: float) -> torch.Tensor:
-    """
-    for rotate
-    
-    :param vector: vector
-    :param theta: rad
-    :return: rotaed_vector
-    """
+def rotate_vector(vector: torch.Tensor, theta: float) -> torch.Tensor:
     rotation_matrix = torch.tensor([
         [torch.cos(theta), -torch.sin(theta)],
         [torch.sin(theta), torch.cos(theta)]
-    ])
-    
-    rotated_vector = torch.matmul(rotation_matrix, vector).to(world.device)
-    
+    ], device=vector.device)
+
+    rotated_vector = torch.matmul(rotation_matrix, vector)
+
     return rotated_vector
 
 # Agent Policy
