@@ -52,8 +52,8 @@ class Scenario(BaseScenario):
         self.ai_red_agents = kwargs.get("ai_red_agents", False)
         self.ai_blue_agents = kwargs.get("ai_blue_agents", False)
         
-        self.n_blue_agents = kwargs.get("n_blue_agents", 2)
-        self.n_red_agents = kwargs.get("n_red_agents", 0)
+        self.n_blue_agents = kwargs.get("n_blue_agents", 1)
+        self.n_red_agents = kwargs.get("n_red_agents", 1)
         self.agent_size = kwargs.get("agent_size", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
@@ -69,9 +69,9 @@ class Scenario(BaseScenario):
         self.dist_reward_ratio = kwargs.get("dist_reward_ratio", 0.01)
         self.agent_ball_vactor_reward_ratio = kwargs.get("agent_ball_vactor_reward_ratio", 1.0)
         self.dribbled_reward_ratio = kwargs.get("dribbled_reward_ratio", 1.0)
-        self.goal_dist_reward_ratio = kwargs.get("goal_dist_reward_ratio", 0.0) #0.0005)
-        self.ball_target_vactor_reward_ratio = kwargs.get("ball_target_vactor_reward_ratio", 0.5) #, 0.07)
-        self.reached_target_reward_ratio = kwargs.get("reached_target_reward_ratio", 0.1) #, 0.1)
+        self.goal_dist_reward_ratio = kwargs.get("goal_dist_reward_ratio", 0.0)
+        self.ball_target_vactor_reward_ratio = kwargs.get("ball_target_vactor_reward_ratio", 0.0)
+        self.reached_target_reward_ratio = kwargs.get("reached_target_reward_ratio", 0.0)
 
 
     def init_world(self, batch_dim: int, device: torch.device):
@@ -145,7 +145,10 @@ class Scenario(BaseScenario):
                     device=self.world.device,
                 )
                 * torch.tensor(
-                    [self.pitch_length / 2, self.pitch_width],
+                    [
+                        self.pitch_length - self.agent_size *2,
+                        self.pitch_width - self.agent_size *2
+                    ],
                     device=self.world.device,
                 )
                 + torch.tensor(
@@ -161,7 +164,7 @@ class Scenario(BaseScenario):
             )
             agent.set_rot(
                 torch.tensor(
-                    0,
+                    torch.rand(1).item() * 2 * math.pi,  # 0から2 * πの間でランダムな角度を生成
                     dtype=torch.float32,
                     device=self.world.device,
                 ),
@@ -185,41 +188,34 @@ class Scenario(BaseScenario):
         
         for agent in self.red_agents:
             agent.set_pos(
-                torch.tensor(
+                torch.rand(
+                    (
+                        (1, self.world.dim_p)
+                        if env_index is not None
+                        else (self.world.batch_dim, self.world.dim_p)
+                    ),
+                    device=self.world.device,
+                )
+                * torch.tensor(
                     [
-                        -self.pitch_length / 2 - self.agent_size ,
-                        -self.pitch_width / 2 - self.agent_size 
+                        self.pitch_length - self.agent_size *2,
+                        self.pitch_width - self.agent_size *2
                     ],
+                    device=self.world.device,
+                )
+                + torch.tensor(
+                    [-self.pitch_length / 2, -self.pitch_width / 2],
                     device=self.world.device,
                 ),
                 batch_index=env_index,
             )
-            # agent.set_pos(
-            #     torch.rand(
-            #         (
-            #             (1, self.world.dim_p)
-            #             if env_index is not None
-            #             else (self.world.batch_dim, self.world.dim_p)
-            #         ),
-            #         device=self.world.device,
-            #     )
-            #     * torch.tensor(
-            #         [self.pitch_length / 2, self.pitch_width],
-            #         device=self.world.device,
-            #     )
-            #     + torch.tensor(
-            #         [-self.pitch_length / 2, -self.pitch_width / 2],
-            #         device=self.world.device,
-            #     ),
-            #     batch_index=env_index,
-            # )
             agent.set_vel(
                 torch.zeros(2, device=self.world.device),
                 batch_index=env_index,
             )
             agent.set_rot(
                 torch.tensor(
-                    0,
+                    torch.rand(1).item() * 2 * math.pi,  # 0から2 * πの間でランダムな角度を生成
                     dtype=torch.float32,
                     device=self.world.device,
                 ),
@@ -231,6 +227,13 @@ class Scenario(BaseScenario):
                     dtype=torch.float32,
                     device=self.world.device,
                 ),
+                batch_index=env_index,
+            )
+            agent.set_dribble(
+                torch.zeros(
+                    1,
+                    dtype=torch.bool,
+                    device=self.world.device),
                 batch_index=env_index,
             )
     def reset_controllers(self, env_index: int = None):
@@ -750,162 +753,134 @@ class Scenario(BaseScenario):
         )
 
     def reward(self, agent: Agent):
-        if agent == self.world.agents[0] or (
-            self.ai_blue_agents and self.ai_red_agents
-        ):
-            # dist Reward
-            self._dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1),
-                                            max=12.5)
-            # print(self._dist_reward)
-            
-            self.dribbled_reward = self.target_dist_reward = self.agent_target_vector_dot = self.agent_ball_vector_dot = self.ball_target_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
-            self.reached_target = torch.zeros(self.world.batch_dim, dtype=bool, device=self.world.device)
-            # Reward calculation for batch envs
-            if self.world.batch_dim == 1:
-                # dribble reward
-                if self.blue_agents[1].state.dribble:
-                    self.dribbled_reward = 0.1
-                    self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[1].state.pos - self.target.state.pos, dim=1),
-                                                max=10.0)
-                    
-                    # target dot reward
-                    direction_vector = self.target.state.pos - self.blue_agents[1].state.pos
-                    direction_norm = torch.norm(direction_vector) + 1e-6
-                    normalized_direction = direction_vector / direction_norm
-                    
-                    self.agent_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
-                                                            self.blue_agents[1].state.vel.unsqueeze(-1)), min=0)
-                    
-                    direction_vector = self.target.state.pos - self.ball.state.pos
-                    direction_norm = torch.norm(direction_vector) + 1e-6
-                    normalized_direction = direction_vector / direction_norm
-                    
-                    self.ball_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
-                                                            self.ball.state.vel.unsqueeze(-1)), min=0)
-                    
-                    self.reached_target = self.world.is_overlapping(self.ball, self.target)
-                else:
-                    self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[1].state.pos - self.ball.state.pos, dim=1),
-                                                    max=10.0)
-                    # ball dot reward
-                    direction_vector = self.ball.state.pos - self.blue_agents[1].state.pos
-                    direction_norm = torch.norm(direction_vector) + 1e-6
-                    normalized_direction = direction_vector / direction_norm
+        # dist Reward
+        self._dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                                        max=12.5)
+
+        self.dribbled_reward = self.target_dist_reward = self.agent_target_vector_dot = self.agent_ball_vector_dot = self.ball_target_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
+        self.reached_target = torch.zeros(self.world.batch_dim, dtype=bool, device=self.world.device)
+        # Reward calculation for batch envs
+        if self.world.batch_dim == 1:
+            # dribble reward
+            if agent.state.dribble:
+                self.dribbled_reward = 0.1
+                self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.target.state.pos, dim=1),
+                                            max=10.0)
                 
-                    self.agent_ball_vector_dot = torch.clamp(torch.matmul(normalized_direction,
-                                                            self.blue_agents[1].state.vel.unsqueeze(-1)),
-                                                            min=0.0)
+                # target dot reward
+                direction_vector = self.target.state.pos - agent.state.pos
+                direction_norm = torch.norm(direction_vector) + 1e-6
+                normalized_direction = direction_vector / direction_norm
+                
+                self.agent_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
+                                                        agent.state.vel.unsqueeze(-1)), min=0)
+                
+                direction_vector = self.target.state.pos - self.ball.state.pos
+                direction_norm = torch.norm(direction_vector) + 1e-6
+                normalized_direction = direction_vector / direction_norm
+                
+                self.ball_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
+                                                        self.ball.state.vel.unsqueeze(-1)), min=0)
+                
+                self.reached_target = self.world.is_overlapping(self.ball, self.target)
             else:
-                # Reward calculation for batch envs
-                dribble_env_indices = torch.where(self.blue_agents[0].state.dribble == torch.tensor([True],device=self.world.device))[0]
-
-                if len(dribble_env_indices) > 0:
-                    # when agent is dribbling
-                    self.agent_ball_vector_dot[dribble_env_indices] = 0
-                    self.dribbled_reward[dribble_env_indices] = 0.1
-                    self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.target.state.pos, dim=1),
+                self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
                                                 max=10.0)
-                    # direction_vector = self.target.state.pos - self.blue_agents[0].state.pos
-                    # direction_norm = torch.norm(direction_vector) + 1e-6
-                    # normalized_direction = direction_vector / direction_norm                         
-                    # self.agent_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), self.blue_agents[0].state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
-                    #                                         min = 0.0)
-                    direction_vector = self.target.state.pos - self.ball.state.pos
-                    direction_norm = torch.norm(direction_vector) + 1e-6
-                    normalized_direction = direction_vector / direction_norm                         
-                    # self.ball_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
-                    #                                         min = 0.0)
-                    self.ball_target_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
-                    self.reached_target = self.world.is_overlapping(self.ball, self.target)
-                else:
-                    # when no agent is dribbling
-                    self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1),
-                                                        max=10.0)
-                    # agent to ball dot reward
-                    direction_vector = self.ball.state.pos - self.blue_agents[0].state.pos
-                    direction_norm = torch.norm(direction_vector) + 1e-6
-                    normalized_direction = direction_vector / direction_norm                         
-                    self.agent_ball_vector_dot = torch.clamp(
-                                                torch.bmm(normalized_direction.unsqueeze(1), self.blue_agents[0].state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
-                                                min = 0.0)
-                    # self.agent_ball_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), self.blue_agents[0].state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
-
-            self._done = torch.tensor([False], device=self.world.device).expand(self.world.batch_dim)
+                # ball dot reward
+                direction_vector = self.ball.state.pos - agent.state.pos
+                direction_norm = torch.norm(direction_vector) + 1e-6
+                normalized_direction = direction_vector / direction_norm
             
-            # now reward
-            self._reward =  self.ball_dist_reward * self.dist_reward_ratio + \
-                            self.agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
-                            self.dribbled_reward * self.dribbled_reward_ratio + \
-                            self.target_dist_reward * self.goal_dist_reward_ratio + \
-                            self.ball_target_vector_dot * self.ball_target_vactor_reward_ratio + \
-                            self.reached_target * self.reached_target_reward_ratio
-            # self._reward
+                self.agent_ball_vector_dot = torch.clamp(torch.matmul(normalized_direction,
+                                                        agent.state.vel.unsqueeze(-1)),
+                                                        min=0.0)
+        else:
+            # Reward calculation for batch envs
+            dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
 
-            # self._reward = self.target_dist_reward * self.dist_reward_ratio * 0.1
-            # self._reward = self.dribbled_reward + \
-            #                 self.agent_ball_vector_dot + \
-            #                 self.ball_dist_reward * self.dist_reward_ratio + \
-            #                 self.target_dist_reward * 0.05 + \
-            #                 self.agent_target_vector_dot + \
-            #                 self.reached_target * 0.1
-            
+            if len(dribble_env_indices) > 0:
+                # when agent is dribbling
+                self.agent_ball_vector_dot[dribble_env_indices] = 0
+                self.dribbled_reward[dribble_env_indices] = 0.1
+                self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.target.state.pos, dim=1),
+                                            max=10.0)
+                # direction_vector = self.target.state.pos - agent.state.pos
+                # direction_norm = torch.norm(direction_vector) + 1e-6
+                # normalized_direction = direction_vector / direction_norm                         
+                # self.agent_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                #                                         min = 0.0)
+                direction_vector = self.target.state.pos - self.ball.state.pos
+                direction_norm = torch.norm(direction_vector) + 1e-6
+                normalized_direction = direction_vector / direction_norm                         
+                # self.ball_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                #                                         min = 0.0)
+                self.ball_target_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
+                self.reached_target = self.world.is_overlapping(self.ball, self.target)
+            else:
+                # when no agent is dribbling
+                self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                                                    max=10.0)
+                # agent to ball dot reward
+                direction_vector = self.ball.state.pos - agent.state.pos
+                direction_norm = torch.norm(direction_vector) + 1e-6
+                normalized_direction = direction_vector / direction_norm                         
+                self.agent_ball_vector_dot = torch.clamp(
+                                            torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                                            min = 0.0)
+                # self.agent_ball_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
 
-            # # RARL reward
-            # if agent == self.blue_agents:
-            #     self._reward = self.protagonistic_reward(agent)
-            # elif agent == self.red_agents:
-            #     self._reward = self.adversarial_reward(agent)
+        self._done = torch.tensor([False], device=self.world.device).expand(self.world.batch_dim)
+        # now reward
+        self._reward =  self.ball_dist_reward * self.dist_reward_ratio
+                        # self.agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
+                        # self.dribbled_reward * self.dribbled_reward_ratio
+        # + \
+        #                 self.target_dist_reward * self.goal_dist_reward_ratio + \
+        #                 self.ball_target_vector_dot * self.ball_target_vactor_reward_ratio + \
+        #                 self.reached_target * self.reached_target_reward_ratio
+
+
+        # RARL reward
+        if agent == self.blue_agents[0]:
+            self._reward += self.protagonistic_reward(agent)
+            print(f"blue agent reward || {self._reward}")
+        elif agent == self.red_agents[0]:
+            self._reward += self.adversarial_reward(agent)
+            # print(f"red agent reward || {self._reward}")
         
         return self._reward
         
 
-    # def protagonistic_reward(self, agent: Agent):
-    #     # dist Reward
-    #     self._dist_reward = 1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1)
-    #     # dribble reward
-    #     if agent.state.ball_dribble:
-    #         self.dribbled_reward = 1
-    #         self.reached_target = self.world.is_overlapping(self.ball, self.target)
-    #     else:
-    #         self.dribbled_reward = self.reached_target = 0
+    def protagonistic_reward(self, agent: Agent):
+        # for a in self.world.agents:
+        #     if a != agent:
+        #         rel = a.state.pos - agent.state.pos
+        #         ball_dist_reward = -torch.clamp(1 / torch.linalg.vector_norm(a.state.pos  - self.ball.state.pos, dim=1),
+        #                                 max=10.0) * self.dist_reward_ratio
+        _reward = 0
 
-    #     self._done = torch.tensor([False], device=self.world.device)
-    #     _reward = self._dist_reward * self.dist_reward_ratio + \
-    #             self.dribbled_reward * self.dribbled_reward_ratio + \
-    #             self.reached_target * self.reached_target_reward_ratio
+        return _reward
 
-    #     return _reward
+    def adversarial_reward(self, agent: Agent):
+        _reward = 0
 
-    # def adversarial_reward(self, agent: Agent):
-    #     # dist Reward
-    #     self._dist_reward = 1 / torch.linalg.vector_norm(self.red_agents[0].state.pos - self.ball.state.pos, dim=1)
-    #     # dribble reward
-    #     if agent.state.ball_dribble:
-    #         self.dribbled_reward = 1
-    #         self.reached_target = self.world.is_overlapping(self.ball, self.target)
-    #     else:
-    #         self.dribbled_reward = self.reached_target = 0
-
-    #     self._done = torch.tensor([False], device=self.world.device)
-    #     _reward = self._dist_reward * self.dist_reward_ratio + \
-    #             self.dribbled_reward * self.dribbled_reward_ratio + \
-    #             self.reached_target * self.reached_target_reward_ratio
-
-    #     return _reward
-
+        return _reward
     def observation(self, agent: Agent):
+        for a in self.world.agents:
+            if a != agent:
+                rel = a.state.pos - agent.state.pos
+
         local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
         local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.target.state.pos)
         agent_rot = agent.state.rot % (2 * math.pi)
-
         obs = torch.cat(
             [
                 agent_rot,
                 agent.state.ang_vel,
                 agent.state.dribble,
                 self.ball.state.pos - agent.state.pos,
+                rel,
                 self.ball.state.vel - agent.state.vel,
-                self.target.state.pos - agent.state.pos,
             ],
             dim=1,
         )
@@ -1991,7 +1966,7 @@ if __name__ == "__main__":
         continuous=True,
         n_blue_agents=3,
         n_red_agents=3,
-        ai_red_agents=True,
+        ai_red_agents=False,
         ai_blue_agents=False,
         dense_reward_ratio=0.001,
     )

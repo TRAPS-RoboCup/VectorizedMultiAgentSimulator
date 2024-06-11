@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
     # scenario_name = "ssl"
     
-    scenario_name = "dribble"
+    scenario_name = "dribble_rarl"
 
     # Scenario specific variables
 

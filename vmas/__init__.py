@@ -33,6 +33,7 @@ scenarios = sorted(
         "discovery",
         "flocking",
         "dribble",
+        "dribble_rarl",
         "passage",
         "joint_passage_size",
         "joint_passage",
