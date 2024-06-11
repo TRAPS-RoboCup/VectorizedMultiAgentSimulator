@@ -281,6 +281,14 @@ class EntityState(TorchVectorizedObject):
 
         self._rot = rot.to(self._device)
 
+    @property
+    def dribble(self):
+        return self._dribble
+
+    @dribble.setter
+    def dribble(self, dribble: Tensor):
+        self._dribble = dribble.to(self._device)
+
     def _reset(self, env_index: typing.Optional[int]):
         for attr_name in ["pos", "rot", "vel", "ang_vel"]:
             attr = self.__getattribute__(attr_name)
@@ -740,6 +748,9 @@ class Entity(TorchVectorizedObject, Observable, ABC):
     def set_ang_vel(self, ang_vel: Tensor, batch_index: int):
         self._set_state_property(EntityState.ang_vel, self.state, ang_vel, batch_index)
 
+    def set_dribble(self, dribble: Tensor, batch_index: int):
+        self._set_state_property(EntityState.dribble, self.state, dribble, batch_index)
+
     def _set_state_property(
         self, prop, entity: EntityState, new: Tensor, batch_index: int
     ):
@@ -861,7 +872,6 @@ class Agent(Entity):
         render_action: bool = False,
         dynamics: Dynamics = None,  # Defaults to holonomic
         action_size: int = None,  # Defaults to what required by the dynamics
-        dribble: bool = False,
     ):
         super().__init__(
             name,
@@ -927,10 +937,6 @@ class Agent(Entity):
 
         # state
         self._state = AgentState()
-
-
-        # dribble flag
-        self._dribble = dribble
 
     def add_sensor(self, sensor: Sensor):
         sensor.agent = self
@@ -1014,13 +1020,6 @@ class Agent(Entity):
     def adversary(self):
         return self._adversary
 
-    @property
-    def dribble(self):
-        return self._dribble
-    
-    @dribble.setter
-    def dribble(self, value):
-        self._dribble = value
 
 
     @override(Entity)
