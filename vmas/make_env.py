@@ -13,7 +13,7 @@ from vmas.simulator.utils import DEVICE_TYPING
 def make_env(
     scenario: Union[str, BaseScenario],
     num_envs: int,
-    device: DEVICE_TYPING = "cpu",
+    device: DEVICE_TYPING = "cuda",
     continuous_actions: bool = True,
     wrapper: Optional[
         Wrapper

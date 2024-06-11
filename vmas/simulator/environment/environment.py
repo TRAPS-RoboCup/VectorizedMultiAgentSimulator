@@ -36,7 +36,7 @@ class Environment(TorchVectorizedObject):
         self,
         scenario: BaseScenario,
         num_envs: int = 32,
-        device: DEVICE_TYPING = "cpu",
+        device: DEVICE_TYPING = "cuda",
         max_steps: Optional[int] = None,
         continuous_actions: bool = True,
         seed: Optional[int] = None,
