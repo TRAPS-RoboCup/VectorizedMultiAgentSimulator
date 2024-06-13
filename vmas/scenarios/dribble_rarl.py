@@ -99,15 +99,15 @@ class Scenario(BaseScenario):
         blue_agents = []
         for i in range(self.n_blue_agents):
             agent = Agent(
-                    name=f"agent_blue_{i}",
-                    shape=Sphere(radius=self.agent_size),
-                    # action_script=self.blue_controller.run if self.ai_blue_agents else None,
-                    color=Color.BLUE,
-                    render_action=True,
-                    max_speed=self.max_speed,
-                    u_range=[1, 1, 1],
-                    u_multiplier=[0.05, 0.05, 0.001],
-                    dynamics=HolonomicWithRotation(),
+                name=f"agent_blue_{i}",
+                shape=Sphere(radius=self.agent_size),
+                # action_script=self.blue_controller.run if self.ai_blue_agents else None,
+                color=Color.BLUE,
+                render_action=True,
+                max_speed=self.max_speed,
+                u_range=[1, 1, 1],
+                u_multiplier=[0.05, 0.05, 0.001],
+                dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
             blue_agents.append(agent)
@@ -117,11 +117,13 @@ class Scenario(BaseScenario):
             agent = Agent(
                 name=f"agent_red_{i}",
                 shape=Sphere(radius=self.agent_size),
-                action_script=self.red_controller.run if self.ai_red_agents else None,
-                u_multiplier=self.u_multiplier,
-                max_speed=self.max_speed,
-                render_action=True,
+                # action_script=self.red_controller.run if self.ai_red_agents else None,
                 color=Color.RED,
+                render_action=True,
+                max_speed=self.max_speed,
+                u_range=[1, 1, 1],
+                u_multiplier=[0.05, 0.05, 0.001],
+                dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
             red_agents.append(agent)
