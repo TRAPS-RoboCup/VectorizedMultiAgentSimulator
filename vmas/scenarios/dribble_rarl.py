@@ -753,110 +753,114 @@ class Scenario(BaseScenario):
         )
 
     def reward(self, agent: Agent):
-        # dist Reward
-        self._dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
-                                        max=12.5)
+        # import ipdb;ipdb.set_trace()
+        if "agent" in agent.name:
+            # dist Reward
+            self._dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                                            max=12.5)
 
-        self.dribbled_reward = self.target_dist_reward = self.agent_target_vector_dot = self.agent_ball_vector_dot = self.ball_target_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
-        self.reached_target = torch.zeros(self.world.batch_dim, dtype=bool, device=self.world.device)
-        # Reward calculation for batch envs
-        if self.world.batch_dim == 1:
-            # dribble reward
-            if agent.state.dribble:
-                self.dribbled_reward = 0.1
-                self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.target.state.pos, dim=1),
-                                            max=10.0)
-                
-                # target dot reward
-                direction_vector = self.target.state.pos - agent.state.pos
-                direction_norm = torch.norm(direction_vector) + 1e-6
-                normalized_direction = direction_vector / direction_norm
-                
-                self.agent_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
-                                                        agent.state.vel.unsqueeze(-1)), min=0)
-                
-                direction_vector = self.target.state.pos - self.ball.state.pos
-                direction_norm = torch.norm(direction_vector) + 1e-6
-                normalized_direction = direction_vector / direction_norm
-                
-                self.ball_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
-                                                        self.ball.state.vel.unsqueeze(-1)), min=0)
-                
-                self.reached_target = self.world.is_overlapping(self.ball, self.target)
-            else:
-                self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
-                                                max=10.0)
-                # ball dot reward
-                direction_vector = self.ball.state.pos - agent.state.pos
-                direction_norm = torch.norm(direction_vector) + 1e-6
-                normalized_direction = direction_vector / direction_norm
-            
-                self.agent_ball_vector_dot = torch.clamp(torch.matmul(normalized_direction,
-                                                        agent.state.vel.unsqueeze(-1)),
-                                                        min=0.0)
-        else:
+            dribbled_reward = agent_ball_vector_dot = self.target_dist_reward = self.agent_target_vector_dot = self.ball_target_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
+            self.reached_target = torch.zeros(self.world.batch_dim, dtype=bool, device=self.world.device)
             # Reward calculation for batch envs
-            dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
-
-            if len(dribble_env_indices) > 0:
-                # when agent is dribbling
-                self.agent_ball_vector_dot[dribble_env_indices] = 0
-                self.dribbled_reward[dribble_env_indices] = 0.1
-                self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.target.state.pos, dim=1),
-                                            max=10.0)
-                # direction_vector = self.target.state.pos - agent.state.pos
-                # direction_norm = torch.norm(direction_vector) + 1e-6
-                # normalized_direction = direction_vector / direction_norm                         
-                # self.agent_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
-                #                                         min = 0.0)
-                direction_vector = self.target.state.pos - self.ball.state.pos
-                direction_norm = torch.norm(direction_vector) + 1e-6
-                normalized_direction = direction_vector / direction_norm                         
-                # self.ball_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
-                #                                         min = 0.0)
-                self.ball_target_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
-                self.reached_target = self.world.is_overlapping(self.ball, self.target)
+            if self.world.batch_dim == 1:
+                # dribble reward
+                ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                                                max=10.0)
+                if agent.state.dribble:
+                    dribbled_reward = 0.1
+                    # self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.target.state.pos, dim=1),
+                    #                             max=10.0)
+                    
+                    # # target dot reward
+                    # direction_vector = self.target.state.pos - agent.state.pos
+                    # direction_norm = torch.norm(direction_vector) + 1e-6
+                    # normalized_direction = direction_vector / direction_norm
+                    
+                    # self.agent_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
+                    #                                         agent.state.vel.unsqueeze(-1)), min=0)
+                    
+                    # direction_vector = self.target.state.pos - self.ball.state.pos
+                    # direction_norm = torch.norm(direction_vector) + 1e-6
+                    # normalized_direction = direction_vector / direction_norm
+                    
+                    # self.ball_target_vector_dot = torch.clamp(torch.matmul(normalized_direction,
+                    #                                         self.ball.state.vel.unsqueeze(-1)), min=0)
+                    
+                    # self.reached_target = self.world.is_overlapping(self.ball, self.target)
+                else:
+                    # ball dot reward
+                    direction_vector = self.ball.state.pos - agent.state.pos
+                    direction_norm = torch.norm(direction_vector) + 1e-6
+                    normalized_direction = direction_vector / direction_norm
+                
+                    agent_ball_vector_dot = torch.clamp(torch.matmul(normalized_direction,
+                                                            agent.state.vel.unsqueeze(-1)),
+                                                            min=0.0)
             else:
-                # when no agent is dribbling
-                self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                # Reward calculation for batch envs
+                dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
+                ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
                                                     max=10.0)
-                # agent to ball dot reward
-                direction_vector = self.ball.state.pos - agent.state.pos
-                direction_norm = torch.norm(direction_vector) + 1e-6
-                normalized_direction = direction_vector / direction_norm                         
-                self.agent_ball_vector_dot = torch.clamp(
-                                            torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
-                                            min = 0.0)
-                # self.agent_ball_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
+                if len(dribble_env_indices) > 0:
+                    # when agent is dribbling
+                    agent_ball_vector_dot[dribble_env_indices] = 0
+                    dribbled_reward[dribble_env_indices] = 0.1
+                    # self.target_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.target.state.pos, dim=1),
+                    #                             max=10.0)
+                    # # direction_vector = self.target.state.pos - agent.state.pos
+                    # # direction_norm = torch.norm(direction_vector) + 1e-6
+                    # # normalized_direction = direction_vector / direction_norm                         
+                    # # self.agent_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                    # #                                         min = 0.0)
+                    # direction_vector = self.target.state.pos - self.ball.state.pos
+                    # direction_norm = torch.norm(direction_vector) + 1e-6
+                    # normalized_direction = direction_vector / direction_norm                         
+                    # # self.ball_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                    # #                                         min = 0.0)
+                    # self.ball_target_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
+                    # self.reached_target = self.world.is_overlapping(self.ball, self.target)
+                else:
+                    # when no agent is dribbling
+                    # ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                    #                                     max=10.0)
+                    # agent to ball dot reward
+                    direction_vector = self.ball.state.pos - agent.state.pos
+                    direction_norm = torch.norm(direction_vector) + 1e-6
+                    normalized_direction = direction_vector / direction_norm                         
+                    agent_ball_vector_dot = torch.clamp(
+                                                torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                                                min = 0.0)
+                    # self.agent_ball_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
 
-        self._done = torch.tensor([False], device=self.world.device).expand(self.world.batch_dim)
-        # now reward
-        self._reward =  self.ball_dist_reward * self.dist_reward_ratio
-                        # self.agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
-                        # self.dribbled_reward * self.dribbled_reward_ratio
-        # + \
-        #                 self.target_dist_reward * self.goal_dist_reward_ratio + \
-        #                 self.ball_target_vector_dot * self.ball_target_vactor_reward_ratio + \
-        #                 self.reached_target * self.reached_target_reward_ratio
+            self._done = torch.tensor([False], device=self.world.device).expand(self.world.batch_dim)
+            # now reward
+            self._reward =  ball_dist_reward * self.dist_reward_ratio + \
+                            agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
+                            dribbled_reward * self.dribbled_reward_ratio
+            # + \
+            #                 self.target_dist_reward * self.goal_dist_reward_ratio + \
+            #                 self.ball_target_vector_dot * self.ball_target_vactor_reward_ratio + \
+            #                 self.reached_target * self.reached_target_reward_ratio
 
 
-        # RARL reward
-        if agent == self.blue_agents[0]:
-            self._reward += self.protagonistic_reward(agent)
-            print(f"blue agent reward || {self._reward}")
-        elif agent == self.red_agents[0]:
-            self._reward += self.adversarial_reward(agent)
-            # print(f"red agent reward || {self._reward}")
-        
+            # RARL reward
+            if agent == self.blue_agents[0]:
+                self._reward += self.protagonistic_reward(agent)
+                # print(f"blue agent reward || {self._reward}")
+            elif agent == self.red_agents[0]:
+                self._reward += self.adversarial_reward(agent)
+                # print(f"red agent reward || {self._reward}")
+            
         return self._reward
         
 
     def protagonistic_reward(self, agent: Agent):
-        # for a in self.world.agents:
-        #     if a != agent:
-        #         rel = a.state.pos - agent.state.pos
-        #         ball_dist_reward = -torch.clamp(1 / torch.linalg.vector_norm(a.state.pos  - self.ball.state.pos, dim=1),
-        #                                 max=10.0) * self.dist_reward_ratio
+        for a in self.world.agents:
+            if a != agent and "agent" in a.name:
+                ball_dist_reward = -torch.clamp(1 / torch.linalg.vector_norm(a.state.pos  - self.ball.state.pos, dim=1),
+                                        max=10.0) * self.dist_reward_ratio
+                # s_ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(agent.state.pos - self.ball.state.pos, dim=1),
+                #                     max=10.0)
         _reward = 0
 
         return _reward
