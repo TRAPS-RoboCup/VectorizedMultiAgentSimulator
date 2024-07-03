@@ -1021,7 +1021,7 @@ class Math:
 
         return rotated_vector
 
-    def world_to_local(self, world_vector: torch.Tensor, rot: torch.Tensor, target_vector: torch.Tensor) -> torch.Tensor:
+    def world_to_local(self, world_vector: torch.Tensor, rot_o: torch.Tensor, target_vector: torch.Tensor) -> torch.Tensor:
         """Converts a point from world coordinates to local coordinates.
 
         Args:
@@ -1033,7 +1033,7 @@ class Math:
             The coordinates of the point in local coordinates (2D tensor).
         """
         # import ipdb; ipdb.set_trace()
-        rot = rot.unsqueeze(-1)
+        rot = rot_o.clone().unsqueeze(-1) * 0.0
         rotation_matrix = torch.cat([torch.cos(rot), -torch.sin(rot), torch.sin(rot), torch.cos(rot)], dim=-1).view(-1, 2, 2)
 
         # Subtract target_vector from world_vector to get the vector from the target to the agent
