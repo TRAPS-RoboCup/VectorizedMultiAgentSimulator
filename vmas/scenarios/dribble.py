@@ -52,8 +52,8 @@ class Scenario(BaseScenario):
         self.ai_red_agents = kwargs.get("ai_red_agents", False)
         self.ai_blue_agents = kwargs.get("ai_blue_agents", False)
         
-        self.n_blue_agents = kwargs.get("n_blue_agents", 2)
-        self.n_red_agents = kwargs.get("n_red_agents", 0)
+        self.n_blue_agents = kwargs.get("n_blue_agents", 1)
+        self.n_red_agents = kwargs.get("n_red_agents", 1)
         self.agent_size = kwargs.get("agent_size", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
