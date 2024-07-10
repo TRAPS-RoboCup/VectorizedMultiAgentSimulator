@@ -52,8 +52,8 @@ class Scenario(BaseScenario):
         self.ai_red_agents = kwargs.get("ai_red_agents", False)
         self.ai_blue_agents = kwargs.get("ai_blue_agents", False)
         
-        self.n_blue_agents = kwargs.get("n_blue_agents", 1)
-        self.n_red_agents = kwargs.get("n_red_agents", 1)
+        self.n_blue_agents = kwargs.get("n_blue_agents", 2)
+        self.n_red_agents = kwargs.get("n_red_agents", 0)
         self.agent_size = kwargs.get("agent_size", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
@@ -816,7 +816,7 @@ class Scenario(BaseScenario):
                     # self.ball_target_vector_dot = torch.clamp(torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
                     #                                         min = 0.0)
                     self.ball_target_vector_dot = torch.bmm(normalized_direction.unsqueeze(1), self.ball.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
-                    self.reached_target = self.world.is_overlapping(self.ball, self.target)
+                    self.reached_target = self.world.is_overlapping(self.blue_agents[0], self.target)
                 else:
                     # when no agent is dribbling
                     self.ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1),
@@ -859,7 +859,24 @@ class Scenario(BaseScenario):
             dim=1,
         )
         return obs
-
+    
+    # def observation(self, agent: Agent):
+    #     local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
+    #     local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.target.state.pos)
+    #     agent_rot = agent.state.rot % (2 * math.pi)
+    #     obs = torch.cat(
+    #         [
+    #             local_axised_ball_pos,
+    #             local_axised_target_pos,
+    #             agent_rot,
+    #             agent.state.vel,
+    #             agent.state.ang_vel,
+    #             agent.state.dribble
+    #         ],
+    #         dim=1,
+    #     )
+    #     return obs
+    
     def done(self):
         if self.ai_blue_agents and self.ai_red_agents:
             self.reward(None)

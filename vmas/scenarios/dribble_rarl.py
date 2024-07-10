@@ -52,8 +52,8 @@ class Scenario(BaseScenario):
         self.ai_red_agents = kwargs.get("ai_red_agents", False)
         self.ai_blue_agents = kwargs.get("ai_blue_agents", False)
         
-        self.n_blue_agents = kwargs.get("n_blue_agents", 0)
-        self.n_red_agents = kwargs.get("n_red_agents", 2)
+        self.n_blue_agents = kwargs.get("n_blue_agents", 1)
+        self.n_red_agents = kwargs.get("n_red_agents", 1)
         self.agent_size = kwargs.get("agent_size", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
@@ -814,15 +814,16 @@ class Scenario(BaseScenario):
 
     def reward(self, agent: Agent):
         if "agent" in agent.name:
-            dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
-            
+            # import ipdb; ipdb.set_trace()
             self._done = torch.tensor([False], device=self.world.device).expand(self.world.batch_dim)
             
             # RARL reward
             if agent == self.blue_agents[0]:
+                dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
                 self._reward = self.protagonistic_reward(agent, dribble_env_indices)
                 # print(f"blue agent reward || {self._reward}")
             elif agent == self.red_agents[0]:
+                dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
                 self._reward = self.adversarial_reward(agent, dribble_env_indices)
                 # print(f"red agent reward || {self._reward}")
             
@@ -913,32 +914,112 @@ class Scenario(BaseScenario):
         return _reward
 
     
+    # def observation(self, agent: Agent):
+    #     for a in self.world.agents:
+    #         if a != agent:
+    #             rel = a.state.pos - agent.state.pos
+        
+    #     if agent.name == "agent_blue_0":
+    #         targe_error = self.blue_target.state.pos - agent.state.pos,
+    #     else:
+    #         targe_error = self.red_target.state.pos - agent.state.pos,
+
+    #     local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
+    #     local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.blue_target.state.pos)
+    #     agent_rot = agent.state.rot % (2 * math.pi)
+    #     obs = torch.cat(
+    #         [
+    #             agent_rot,
+    #             agent.state.ang_vel,
+    #             agent.state.dribble,
+    #             self.ball.state.pos - agent.state.pos,
+    #             rel,
+    #             targe_error[0], # remove tuple
+    #             self.ball.state.vel - agent.state.vel,
+    #         ],
+    #         dim=1,
+    #     )
+    #     return obs
+
     def observation(self, agent: Agent):
         for a in self.world.agents:
             if a != agent:
-                rel = a.state.pos - agent.state.pos
+                # rel = a.state.pos - agent.state.pos
+                local_axised_rel = self.math.world_to_local(agent.state.pos, agent.state.rot, a.state.pos)
         
         if agent.name == "agent_blue_0":
-            targe_error = self.blue_target.state.pos - agent.state.pos,
-        else:
-            targe_error = self.red_target.state.pos - agent.state.pos,
+            # targe_error = self.blue_target.state.pos - agent.state.pos,
+            local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
+            local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.blue_target.state.pos)
+            agent_rot = agent.state.rot % (2 * math.pi)
 
-        local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
-        local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.blue_target.state.pos)
-        agent_rot = agent.state.rot % (2 * math.pi)
-        obs = torch.cat(
-            [
-                agent_rot,
-                agent.state.ang_vel,
-                agent.state.dribble,
-                self.ball.state.pos - agent.state.pos,
-                rel,
-                targe_error[0], # remove tuple
-                self.ball.state.vel - agent.state.vel,
-            ],
-            dim=1,
-        )
+            obs = torch.cat(
+                [
+                    agent_rot,
+                    agent.state.ang_vel,
+                    local_axised_ball_pos,
+                    local_axised_target_pos,
+                    local_axised_rel,
+                    agent.state.vel,
+                    agent.state.dribble,
+                ],
+                dim=1,
+            )
+        
+        else:
+            # targe_error = self.red_target.state.pos - agent.state.pos,
+            local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
+            local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.red_target.state.pos)
+            agent_rot = agent.state.rot % (2 * math.pi)
+        
+
+            obs = torch.cat(
+                [
+                    agent_rot,
+                    agent.state.ang_vel,
+                    local_axised_ball_pos,
+                    local_axised_target_pos,
+                    local_axised_rel,
+                    agent.state.vel,
+                    agent.state.dribble,
+                ],
+                dim=1,
+            )
         return obs
+
+    # def observation(self, agent: Agent):
+        
+    #     agent_rot = agent.state.rot % (2 * math.pi)
+    #     obs = torch.cat(
+    #         [
+    #             self.ball.state.pos - agent.state.pos,
+    #             self.blue_target.state.pos - agent.state.pos,
+    #             agent_rot,
+    #             agent.state.vel,
+    #             agent.state.ang_vel,
+    #             agent.state.dribble
+    #         ],
+    #         dim=1,
+    #     )
+    #     return obs
+
+    # def observation(self, agent: Agent):
+    #     local_axised_ball_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.ball.state.pos)
+    #     local_axised_target_pos = self.math.world_to_local(agent.state.pos, agent.state.rot, self.blue_target.state.pos)
+    #     agent_rot = agent.state.rot % (2 * math.pi)
+    #     obs = torch.cat(
+    #         [
+    #             local_axised_ball_pos,
+    #             local_axised_target_pos,
+    #             agent_rot,
+    #             agent.state.vel,
+    #             agent.state.ang_vel,
+    #             agent.state.dribble
+    #         ],
+    #         dim=1,
+    #     )
+    #     return obs
+
 
     def done(self):
         if self.ai_blue_agents and self.ai_red_agents:
@@ -1072,8 +1153,11 @@ class Scenario(BaseScenario):
                     if inner_product >= inner_product_threshold and \
                         torch.norm(relative_vel) <= dribblable_vel_threshold and \
                         torch.norm(ball_pos_vector) <= agent_dist:
-                        # agent dribble the ball
                         agent.state.dribble[env_index] = True
+                        if agent == self.blue_agents[0]:
+                            world.agents[1].state.dribble[env_index] = False
+                        elif agent == self.red_agents[0]:
+                            world.agents[0].state.dribble[env_index] = False
                     # if the ball is over some threshold(agent.state.vel and agent.state.ang_vel),
                     # agent can't dribble the ball.
                     if agent.state.dribble[env_index]:
@@ -1113,7 +1197,7 @@ class Math:
             The coordinates of the point in local coordinates (2D tensor).
         """
         # import ipdb; ipdb.set_trace()
-        rot = rot.unsqueeze(-1) * 0
+        rot = rot.unsqueeze(-1) * 0.0
         rotation_matrix = torch.cat([torch.cos(rot), -torch.sin(rot), torch.sin(rot), torch.cos(rot)], dim=-1).view(-1, 2, 2)
 
         # Subtract target_vector from world_vector to get the vector from the target to the agent
