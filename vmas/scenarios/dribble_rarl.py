@@ -816,14 +816,13 @@ class Scenario(BaseScenario):
         if "agent" in agent.name:
             # import ipdb; ipdb.set_trace()
             self._done = torch.tensor([False], device=self.world.device).expand(self.world.batch_dim)
-            
+            dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
+                
             # RARL reward
             if agent == self.blue_agents[0]:
-                dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
                 self._reward = self.protagonistic_reward(agent, dribble_env_indices)
                 # print(f"blue agent reward || {self._reward}")
             elif agent == self.red_agents[0]:
-                dribble_env_indices = torch.where(agent.state.dribble == torch.tensor([True],device=self.world.device))[0]
                 self._reward = self.adversarial_reward(agent, dribble_env_indices)
                 # print(f"red agent reward || {self._reward}")
             
