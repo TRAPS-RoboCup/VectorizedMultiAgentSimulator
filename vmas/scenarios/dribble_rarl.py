@@ -27,7 +27,8 @@ class Scenario(BaseScenario):
         self.init_ball(world)
         self.init_background(world)
         self.init_walls(world)
-        self.init_goals(world)
+        # self.init_goals(world)
+        self.init_areas(world)
         self.init_target(world)
         self._done = torch.zeros(batch_dim, device=device, dtype=torch.bool)
         self.math = Math()
@@ -38,7 +39,8 @@ class Scenario(BaseScenario):
         self.reset_agents(env_index)
         self.reset_background(env_index)
         self.reset_walls(env_index)
-        self.reset_goals(env_index)
+        # self.reset_goals(env_index)
+        self.reset_areas(env_index)
         self.reset_target(env_index)
         self.reset_controllers(env_index)
         if env_index is None:
@@ -57,12 +59,14 @@ class Scenario(BaseScenario):
         self.agent_size = kwargs.get("agent_size", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
+        self.area_size = kwargs.get("area_size", 0.35)
+        self.area_depth = kwargs.get("area_depth", 0.1)
         self.pitch_length = kwargs.get("pitch_length", 3.0)
         self.pitch_width = kwargs.get("pitch_width", 1.5)
         self.max_speed = kwargs.get("max_speed", 0.15)
         self.u_multiplier = kwargs.get("u_multiplier", 0.1)
         self.ball_max_speed = kwargs.get("ball_max_speed", 0.3)
-        self.ball_mass = kwargs.get("ball_mass", 0.1)
+        self.ball_mass = kwargs.get("ball_mass", 1.0)
         self.ball_size = kwargs.get("ball_size", 0.02)
         self.n_traj_points = kwargs.get("n_traj_points", 8)
         self.n_traj_points = kwargs.get("n_target_points", 2)
@@ -73,6 +77,7 @@ class Scenario(BaseScenario):
         self.goal_dist_reward_ratio = kwargs.get("goal_dist_reward_ratio", 0.0)
         self.ball_target_vactor_reward_ratio = kwargs.get("ball_target_vactor_reward_ratio", 0.5)
         self.reached_target_reward_ratio = kwargs.get("reached_target_reward_ratio", 0.1)
+        self.area_reward_ratio = kwargs.get("area_reward_ratio", 0.01)
 
 
     def init_world(self, batch_dim: int, device: torch.device):
@@ -82,7 +87,7 @@ class Scenario(BaseScenario):
             device,
             dt=0.1,
             drag=0.05,
-            x_semidim=self.pitch_length / 2 + self.goal_depth - self.agent_size,
+            x_semidim=self.pitch_length / 2 - self.agent_size,
             y_semidim=self.pitch_width / 2 - self.agent_size,
         )
         world.agent_size = self.agent_size
@@ -94,8 +99,11 @@ class Scenario(BaseScenario):
 
     def init_agents(self, world):
         # Add agents
-        self.blue_controller = AgentPolicy(team="Blue")
-        self.red_controller = AgentPolicy(team="Red")
+        # self.blue_controller = AgentPolicy(team="Blue")
+        # self.red_controller = AgentPolicy(team="Red")
+
+        self.blue_controller = None
+        self.red_controller = None
 
         blue_agents = []
         for i in range(self.n_blue_agents):
@@ -107,7 +115,8 @@ class Scenario(BaseScenario):
                 render_action=True,
                 max_speed=self.max_speed,
                 u_range=[1, 1, 1],
-                u_multiplier=[0.05, 0.05, 0.001],
+                u_multiplier=[0.25, 0.25, 0.002],
+                mass=4.0,
                 dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
@@ -123,7 +132,8 @@ class Scenario(BaseScenario):
                 render_action=True,
                 max_speed=self.max_speed,
                 u_range=[1, 1, 1],
-                u_multiplier=[0.05, 0.05, 0.001],
+                u_multiplier=[0.25, 0.25, 0.002],
+                mass=4.0,
                 dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
@@ -149,13 +159,13 @@ class Scenario(BaseScenario):
                 )
                 * torch.tensor(
                     [
-                        self.pitch_length - self.agent_size *2,
-                        self.pitch_width - self.agent_size *2
+                        self.pitch_length - self.agent_size *8,
+                        self.pitch_width - self.agent_size *8
                     ],
                     device=self.world.device,
                 )
                 + torch.tensor(
-                    [-self.pitch_length / 2, -self.pitch_width / 2],
+                    [-self.pitch_length / 2 + self.agent_size * 4, -self.pitch_width / 2  + self.agent_size * 4],
                     device=self.world.device,
                 ),
                 batch_index=env_index,
@@ -201,13 +211,13 @@ class Scenario(BaseScenario):
                 )
                 * torch.tensor(
                     [
-                        self.pitch_length - self.agent_size *2,
-                        self.pitch_width - self.agent_size *2
+                        self.pitch_length - self.agent_size *8,
+                        self.pitch_width - self.agent_size *8
                     ],
                     device=self.world.device,
                 )
                 + torch.tensor(
-                    [-self.pitch_length / 2, -self.pitch_width / 2],
+                    [-self.pitch_length / 2 + self.agent_size * 4, -self.pitch_width / 2  + self.agent_size * 4],
                     device=self.world.device,
                 ),
                 batch_index=env_index,
@@ -275,13 +285,13 @@ class Scenario(BaseScenario):
             )
             * torch.tensor(
                 [
-                    self.pitch_length - self.agent_size *2,
-                    self.pitch_width - self.agent_size *2
+                    self.pitch_length - self.agent_size *8,
+                    self.pitch_width - self.agent_size *8
                 ],
                 device=self.world.device,
             )
             + torch.tensor(
-                [-self.pitch_length / 2, -self.pitch_width / 2],
+                [-self.pitch_length / 2 + self.agent_size * 4, -self.pitch_width / 2  + self.agent_size * 4],
                 device=self.world.device,
             ),
             batch_index=env_index,
@@ -741,6 +751,110 @@ class Scenario(BaseScenario):
                     batch_index=env_index,
                 )
 
+
+    def init_areas(self, world):
+        top_lim_area = Landmark(
+            name="Top Limit Area",
+            collide=False,
+            movable=False,
+            shape=Box(length=self.pitch_length - self.agent_size * 2, width=self.agent_size),
+            color=(0.5, 0.5, 0.5, 0.5),
+            )
+        world.add_landmark(top_lim_area)
+
+        self.top_lim_area = top_lim_area
+        world.top_lim_area = top_lim_area
+
+        bottom_lim_area = Landmark(
+            name="Bottom Limit Area",
+            collide=False,
+            movable=False,
+            shape=Box(length=self.pitch_length - self.agent_size * 2, width=self.agent_size),
+            color=(0.5, 0.5, 0.5, 0.5),
+            )
+        world.add_landmark(bottom_lim_area)
+
+        self.bottom_lim_area = bottom_lim_area
+        world.bottom_lim_area = bottom_lim_area
+
+        right_lim_area = Landmark(
+            name="Right Limit Area",
+            collide=False,
+            movable=False,
+            shape=Box(length=self.agent_size, width=self.pitch_width - self.agent_size * 2),
+            color=(0.5, 0.5, 0.5, 0.5),
+            )
+        world.add_landmark(right_lim_area)
+
+        self.right_lim_area = right_lim_area
+        world.right_lim_area = right_lim_area
+
+        left_lim_area = Landmark(
+            name="Left Limit Area",
+            collide=False,
+            movable=False,
+            shape=Box(length=self.agent_size, width=self.pitch_width - self.agent_size * 2),
+            color=(0.5, 0.5, 0.5, 0.5),
+            )
+        world.add_landmark(left_lim_area)
+
+        self.left_lim_area = left_lim_area
+        world.left_lim_area = left_lim_area
+
+
+    def reset_areas(self, env_index: int = None):
+        for landmark in self.world.landmarks:
+            if landmark.name == "Top Limit Area":
+                landmark.set_pos(
+                    torch.tensor(
+                        [
+                            0.0,
+                            self.pitch_width / 2 - self.agent_size,
+                        ],
+                        dtype=torch.float32,
+                        device=self.world.device,
+                    ),
+                    batch_index=env_index,
+                )
+            elif landmark.name == "Bottom Limit Area":
+                landmark.set_pos(
+                    torch.tensor(
+                        [
+                            0.0,
+                            - self.pitch_width / 2 + self.agent_size,
+                        ],
+                        dtype=torch.float32,
+                        device=self.world.device,
+                    ),
+                    batch_index=env_index,
+                )
+            if landmark.name == "Right Limit Area":
+                landmark.set_pos(
+                    torch.tensor(
+                        [
+                            self.pitch_length / 2
+                            - self.agent_size,
+                            0.0,
+                        ],
+                        dtype=torch.float32,
+                        device=self.world.device,
+                    ),
+                    batch_index=env_index,
+                )
+            if landmark.name == "Left Limit Area":
+                landmark.set_pos(
+                    torch.tensor(
+                        [
+                            - self.pitch_length / 2
+                            + self.agent_size,
+                            0.0,
+                        ],
+                        dtype=torch.float32,
+                        device=self.world.device,
+                    ),
+                    batch_index=env_index,
+                )
+
     def init_target(self, world):
         blue_target = Landmark(
             name="Blue_Target",
@@ -778,13 +892,13 @@ class Scenario(BaseScenario):
             )
             * torch.tensor(
                 [
-                    self.pitch_length - self.agent_size *2,
-                    self.pitch_width - self.agent_size *2
+                    self.pitch_length - self.agent_size *8,
+                    self.pitch_width - self.agent_size *8
                 ],
                 device=self.world.device,
             )
             + torch.tensor(
-                [-self.pitch_length / 2, -self.pitch_width / 2],
+                [-self.pitch_length / 2 + self.agent_size * 4, -self.pitch_width / 2  + self.agent_size * 4],
                 device=self.world.device,
             ),
             batch_index=env_index,
@@ -800,13 +914,13 @@ class Scenario(BaseScenario):
             )
             * torch.tensor(
                 [
-                    self.pitch_length - self.agent_size *2,
-                    self.pitch_width - self.agent_size *2
+                    self.pitch_length - self.agent_size *8,
+                    self.pitch_width - self.agent_size *8
                 ],
                 device=self.world.device,
             )
             + torch.tensor(
-                [-self.pitch_length / 2, -self.pitch_width / 2],
+                [-self.pitch_length / 2 + self.agent_size * 4, -self.pitch_width / 2  + self.agent_size * 4],
                 device=self.world.device,
             ),
             batch_index=env_index,
@@ -830,12 +944,12 @@ class Scenario(BaseScenario):
         
 
     def protagonistic_reward(self, agent: Agent, dribble_env_indices):
-        zero_batch = torch.zeros(self.world.batch_dim, device=self.world.device)
-        ball_dist_reward = zero_batch.clone()
-        agent_ball_vector_dot = zero_batch.clone()
-        dribbled_reward = zero_batch.clone()
-        ball_target_vector_dot = zero_batch.clone()
+        ball_dist_reward = torch.zeros(self.world.batch_dim, device=self.world.device)
+        agent_ball_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
+        dribbled_reward = torch.zeros(self.world.batch_dim, device=self.world.device)
+        ball_target_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
         reached_target = torch.zeros(self.world.batch_dim, dtype=torch.bool, device=self.world.device)
+        area_reward = torch.zeros(self.world.batch_dim, dtype=torch.bool, device=self.world.device)
 
         if len(dribble_env_indices) > 0:
             dribbled_reward[dribble_env_indices] = 0.1
@@ -849,7 +963,13 @@ class Scenario(BaseScenario):
                                                                     self.ball.state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
                                                                 , min=0.0)
             reached_target[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.blue_target)[dribble_env_indices]
-
+            
+            area_reward[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.top_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.bottom_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.right_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.left_lim_area)[dribble_env_indices]
+        
+            
         else:
             ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1),
                                     max=10.0)
@@ -866,18 +986,19 @@ class Scenario(BaseScenario):
                     agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
                     dribbled_reward * self.dribbled_reward_ratio + \
                     ball_target_vector_dot * self.ball_target_vactor_reward_ratio + \
-                    reached_target * self.reached_target_reward_ratio
+                    reached_target * self.reached_target_reward_ratio - \
+                    area_reward * self.area_reward_ratio
 
         return _reward
 
     def adversarial_reward(self, agent: Agent, dribble_env_indices):
-        zero_batch = torch.zeros(self.world.batch_dim, device=self.world.device)
-        ball_dist_reward = zero_batch.clone()
-        agent_ball_vector_dot = zero_batch.clone()
-        dribbled_reward = zero_batch.clone()
-        ball_target_vector_dot = zero_batch.clone()
+        ball_dist_reward = torch.zeros(self.world.batch_dim, device=self.world.device)
+        agent_ball_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
+        dribbled_reward = torch.zeros(self.world.batch_dim, device=self.world.device)
+        ball_target_vector_dot = torch.zeros(self.world.batch_dim, device=self.world.device)
         reached_target = torch.zeros(self.world.batch_dim, dtype=torch.bool, device=self.world.device)
-
+        area_reward = torch.zeros(self.world.batch_dim, dtype=torch.bool, device=self.world.device)
+        
         # if self.world.batch_dim == 1:
         if len(dribble_env_indices) > 0:
             dribbled_reward[dribble_env_indices] = 0.1
@@ -891,7 +1012,10 @@ class Scenario(BaseScenario):
                                                                                 self.ball.state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
                                                                 , min=0.0)
             reached_target[dribble_env_indices] = self.world.is_overlapping(self.red_agents[0], self.red_target)[dribble_env_indices]
-
+            area_reward[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.top_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.bottom_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.right_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.left_lim_area)[dribble_env_indices]
         else:
             ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.red_agents[0].state.pos - self.ball.state.pos, dim=1),
                                 max=10.0)
@@ -908,7 +1032,8 @@ class Scenario(BaseScenario):
                     agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
                     dribbled_reward * self.dribbled_reward_ratio + \
                     ball_target_vector_dot * self.ball_target_vactor_reward_ratio + \
-                    reached_target * self.reached_target_reward_ratio
+                    reached_target * self.reached_target_reward_ratio - \
+                    area_reward * self.area_reward_ratio
     
         return _reward
 
@@ -1129,7 +1254,7 @@ class Scenario(BaseScenario):
         agent_dist = 0.08 
         dribblable_vel_threshold = 0.1
         inner_product_threshold = 0.9
-        angular_velocity_threshold = 1
+        angular_velocity_threshold = 0.75
         release_attenuation = 0.1
         for env_index in range(world.batch_dim):
             for i, agent in enumerate(world.agents):
@@ -1154,9 +1279,9 @@ class Scenario(BaseScenario):
                         torch.norm(ball_pos_vector) <= agent_dist:
                         agent.state.dribble[env_index] = True
                         if agent == self.blue_agents[0]:
-                            world.agents[1].state.dribble[env_index] = False
+                            self.red_agents[0].state.dribble[env_index] = False
                         elif agent == self.red_agents[0]:
-                            world.agents[0].state.dribble[env_index] = False
+                            self.blue_agents[0].state.dribble[env_index] = False
                     # if the ball is over some threshold(agent.state.vel and agent.state.ang_vel),
                     # agent can't dribble the ball.
                     if agent.state.dribble[env_index]:
@@ -1210,7 +1335,7 @@ class Math:
 
 
 # Agent Policy
-class AgentPolicy:
+# class AgentPolicy:
     def __init__(self, team="Red"):
         self.team_name = team
         self.otherteam_name = "Blue" if (self.team_name == "Red") else "Red"
