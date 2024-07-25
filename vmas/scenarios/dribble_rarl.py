@@ -77,7 +77,7 @@ class Scenario(BaseScenario):
         self.goal_dist_reward_ratio = kwargs.get("goal_dist_reward_ratio", 0.0)
         self.ball_target_vactor_reward_ratio = kwargs.get("ball_target_vactor_reward_ratio", 0.5)
         self.reached_target_reward_ratio = kwargs.get("reached_target_reward_ratio", 0.1)
-        self.area_reward_ratio = kwargs.get("area_reward_ratio", 0.01)
+        self.area_reward_ratio = kwargs.get("area_reward_ratio", 0.05)
 
 
     def init_world(self, batch_dim: int, device: torch.device):
@@ -964,11 +964,6 @@ class Scenario(BaseScenario):
                                                                 , min=0.0)
             reached_target[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.blue_target)[dribble_env_indices]
             
-            area_reward[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.top_lim_area)[dribble_env_indices]
-            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.bottom_lim_area)[dribble_env_indices]
-            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.right_lim_area)[dribble_env_indices]
-            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.left_lim_area)[dribble_env_indices]
-        
             
         else:
             ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1),
@@ -982,6 +977,11 @@ class Scenario(BaseScenario):
                                                     agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
                                         min = 0.0)
 
+        area_reward = self.world.is_overlapping(self.blue_agents[0], self.top_lim_area)
+        area_reward += self.world.is_overlapping(self.blue_agents[0], self.bottom_lim_area)
+        area_reward += self.world.is_overlapping(self.blue_agents[0], self.right_lim_area)
+        area_reward += self.world.is_overlapping(self.blue_agents[0], self.left_lim_area)
+    
         _reward = ball_dist_reward * self.dist_reward_ratio + \
                     agent_ball_vector_dot * self.agent_ball_vactor_reward_ratio + \
                     dribbled_reward * self.dribbled_reward_ratio + \
@@ -1256,6 +1256,7 @@ class Scenario(BaseScenario):
         inner_product_threshold = 0.9
         angular_velocity_threshold = 0.75
         release_attenuation = 0.1
+
         for env_index in range(world.batch_dim):
             for i, agent in enumerate(world.agents):
                 if "agent" in agent.name and agent.name != "Ball":
