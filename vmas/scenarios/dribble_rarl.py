@@ -1012,10 +1012,10 @@ class Scenario(BaseScenario):
                                                                                 self.ball.state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
                                                                 , min=0.0)
             reached_target[dribble_env_indices] = self.world.is_overlapping(self.red_agents[0], self.red_target)[dribble_env_indices]
-            area_reward[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.top_lim_area)[dribble_env_indices]
-            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.bottom_lim_area)[dribble_env_indices]
-            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.right_lim_area)[dribble_env_indices]
-            area_reward[dribble_env_indices] += self.world.is_overlapping(self.blue_agents[0], self.left_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] = self.world.is_overlapping(self.red_agents[0], self.top_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.red_agents[0], self.bottom_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.red_agents[0], self.right_lim_area)[dribble_env_indices]
+            area_reward[dribble_env_indices] += self.world.is_overlapping(self.red_agents[0], self.left_lim_area)[dribble_env_indices]
         else:
             ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.red_agents[0].state.pos - self.ball.state.pos, dim=1),
                                 max=10.0)
