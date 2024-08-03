@@ -57,16 +57,19 @@ class Scenario(BaseScenario):
         self.n_blue_agents = kwargs.get("n_blue_agents", 1)
         self.n_red_agents = kwargs.get("n_red_agents", 1)
         self.agent_size = kwargs.get("agent_size", 0.05)
+        self.agent_mass = kwargs.get("agent_mass", 4.0)
+        self.agent_dencity = kwargs.get("agent_dencity", 1.0)
+        self.agent_friction = kwargs.get("agent_friction", 0.05)
         self.goal_size = kwargs.get("goal_size", 0.35)
         self.goal_depth = kwargs.get("goal_depth", 0.1)
         self.area_size = kwargs.get("area_size", 0.35)
         self.area_depth = kwargs.get("area_depth", 0.1)
         self.pitch_length = kwargs.get("pitch_length", 3.0)
         self.pitch_width = kwargs.get("pitch_width", 1.5)
-        self.max_speed = kwargs.get("max_speed", 0.15)
-        self.u_multiplier = kwargs.get("u_multiplier", 0.1)
+        self.max_speed = kwargs.get("max_speed", 0.1)
+        self.u_multiplier = kwargs.get("u_multiplier", 0.5)
         self.ball_max_speed = kwargs.get("ball_max_speed", 0.3)
-        self.ball_mass = kwargs.get("ball_mass", 1.0)
+        self.ball_mass = kwargs.get("ball_mass", 10.0)
         self.ball_size = kwargs.get("ball_size", 0.02)
         self.n_traj_points = kwargs.get("n_traj_points", 8)
         self.n_traj_points = kwargs.get("n_target_points", 2)
@@ -86,9 +89,11 @@ class Scenario(BaseScenario):
             batch_dim,
             device,
             dt=0.1,
-            drag=0.05,
+            drag=0.01,
             x_semidim=self.pitch_length / 2 - self.agent_size,
             y_semidim=self.pitch_width / 2 - self.agent_size,
+            collision_force=1,
+            contact_margin=6e-1,
         )
         world.agent_size = self.agent_size
         world.pitch_width = self.pitch_width
@@ -116,7 +121,10 @@ class Scenario(BaseScenario):
                 max_speed=self.max_speed,
                 u_range=[1, 1, 1],
                 u_multiplier=[0.25, 0.25, 0.002],
-                mass=4.0,
+                mass=self.agent_mass,
+                density = self.agent_dencity,
+                # drag = 1.0,
+                linear_friction=self.agent_friction,
                 dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
@@ -132,8 +140,11 @@ class Scenario(BaseScenario):
                 render_action=True,
                 max_speed=self.max_speed,
                 u_range=[1, 1, 1],
-                u_multiplier=[0.25, 0.25, 0.002],
-                mass=4.0,
+                u_multiplier=[0.25, 0.25, 0.0005],
+                mass=self.agent_mass,
+                density = self.agent_dencity,
+                # drag = 1.0,
+                linear_friction=self.agent_friction,
                 dynamics=HolonomicWithRotation(),
             )
             world.add_agent(agent)
@@ -955,12 +966,12 @@ class Scenario(BaseScenario):
             dribbled_reward[dribble_env_indices] = 0.1
             agent_ball_vector_dot[dribble_env_indices] = 0
 
-            direction_vector = self.blue_target.state.pos[dribble_env_indices] - self.ball.state.pos[dribble_env_indices]
+            direction_vector = self.blue_target.state.pos[dribble_env_indices] - self.blue_agents[0].state.pos[dribble_env_indices]
             direction_norm = torch.norm(direction_vector) + 1e-6
             normalized_direction = direction_vector / direction_norm
             ball_target_vector_dot[dribble_env_indices] = torch.clamp( 
                                                                 torch.bmm(normalized_direction.unsqueeze(1), 
-                                                                    self.ball.state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
+                                                                    self.blue_agents[0].state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
                                                                 , min=0.0)
             reached_target[dribble_env_indices] = self.world.is_overlapping(self.blue_agents[0], self.blue_target)[dribble_env_indices]
             
@@ -969,12 +980,12 @@ class Scenario(BaseScenario):
             ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.blue_agents[0].state.pos - self.ball.state.pos, dim=1),
                                     max=10.0)
             # agent to ball dot reward
-            direction_vector = self.ball.state.pos - agent.state.pos
+            direction_vector = self.ball.state.pos - self.blue_agents[0].state.pos
             direction_norm = torch.norm(direction_vector) + 1e-6
             normalized_direction = direction_vector / direction_norm                         
             agent_ball_vector_dot = torch.clamp(
                                         torch.bmm(normalized_direction.unsqueeze(1), 
-                                                    agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
+                                                    self.blue_agents[0].state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1),
                                         min = 0.0)
 
         area_reward = self.world.is_overlapping(self.blue_agents[0], self.top_lim_area)
@@ -1004,12 +1015,12 @@ class Scenario(BaseScenario):
             dribbled_reward[dribble_env_indices] = 0.1
             agent_ball_vector_dot[dribble_env_indices] = 0
 
-            direction_vector = self.red_target.state.pos[dribble_env_indices] - self.ball.state.pos[dribble_env_indices]
+            direction_vector = self.red_target.state.pos[dribble_env_indices] - self.red_agents[0].state.pos[dribble_env_indices]
             direction_norm = torch.norm(direction_vector) + 1e-6
             normalized_direction = direction_vector / direction_norm
             ball_target_vector_dot[dribble_env_indices]  = torch.clamp( 
                                                                     torch.bmm(normalized_direction.unsqueeze(1), 
-                                                                                self.ball.state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
+                                                                                self.red_agents[0].state.vel[dribble_env_indices].unsqueeze(2)).squeeze(-1).squeeze(-1)
                                                                 , min=0.0)
             reached_target[dribble_env_indices] = self.world.is_overlapping(self.red_agents[0], self.red_target)[dribble_env_indices]
             area_reward[dribble_env_indices] = self.world.is_overlapping(self.red_agents[0], self.top_lim_area)[dribble_env_indices]
@@ -1020,12 +1031,12 @@ class Scenario(BaseScenario):
             ball_dist_reward = torch.clamp(1 / torch.linalg.vector_norm(self.red_agents[0].state.pos - self.ball.state.pos, dim=1),
                                 max=10.0)
             # agent to ball dot reward
-            direction_vector = self.ball.state.pos - agent.state.pos
+            direction_vector = self.ball.state.pos - self.red_agents[0].state.pos
             direction_norm = torch.norm(direction_vector) + 1e-6
             normalized_direction = direction_vector / direction_norm
             agent_ball_vector_dot = torch.clamp( 
                                                 torch.bmm(normalized_direction.unsqueeze(1), 
-                                                            agent.state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
+                                                            self.red_agents[0].state.vel.unsqueeze(2)).squeeze(-1).squeeze(-1)
                                             , min=0.0)
 
         _reward = ball_dist_reward * self.dist_reward_ratio + \
@@ -1079,6 +1090,7 @@ class Scenario(BaseScenario):
 
             obs = torch.cat(
                 [
+                    agent.state.pos,
                     agent_rot,
                     agent.state.ang_vel,
                     local_axised_ball_pos,
@@ -1099,6 +1111,7 @@ class Scenario(BaseScenario):
 
             obs = torch.cat(
                 [
+                    agent.state.pos,
                     agent_rot,
                     agent.state.ang_vel,
                     local_axised_ball_pos,

@@ -2414,7 +2414,7 @@ class World(TorchVectorizedObject):
             * force_multiplier
             * delta_pos
             / torch.where(dist > 0, dist, 1e-8).unsqueeze(-1)
-            * penetration.unsqueeze(-1)
+            # * penetration.unsqueeze(-1)
         )
         force = torch.where((dist < min_dist).unsqueeze(-1), 0.0, force)
         if not attractive:
