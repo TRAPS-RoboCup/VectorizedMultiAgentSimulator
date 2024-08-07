@@ -1909,6 +1909,7 @@ class World(TorchVectorizedObject):
             force_a, force_b = self._get_constraint_forces(
                 pos_s_a,
                 pos_s_b,
+                # dist_min=radius_s_a*2*math.pi + radius_s_b*2*math.pi,
                 dist_min=radius_s_a + radius_s_b,
                 force_multiplier=self._collision_force,
             )
@@ -2414,7 +2415,7 @@ class World(TorchVectorizedObject):
             * force_multiplier
             * delta_pos
             / torch.where(dist > 0, dist, 1e-8).unsqueeze(-1)
-            # * penetration.unsqueeze(-1)
+            * penetration.unsqueeze(-1)
         )
         force = torch.where((dist < min_dist).unsqueeze(-1), 0.0, force)
         if not attractive:
