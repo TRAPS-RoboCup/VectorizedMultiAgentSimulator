@@ -1088,7 +1088,7 @@ class Scenario(BaseScenario):
 
             obs = torch.cat(
                 [
-                    # agent.state.pos,
+                    agent.state.pos,
                     agent_rot,
                     agent.state.ang_vel,
                     local_axised_ball_pos,
@@ -1156,8 +1156,15 @@ class Scenario(BaseScenario):
     #     return obs
 
     def done(self):
-        if self.ai_blue_agents and self.ai_red_agents:
-            self.reward(None)
+        area_done = torch.zeros(self.world.batch_dim, dtype=torch.bool, device=self.world.device)
+
+        area_done = self.world.is_overlapping(self.ball, self.top_lim_area)
+        area_done += self.world.is_overlapping(self.ball, self.bottom_lim_area)
+        area_done += self.world.is_overlapping(self.ball, self.right_lim_area)
+        area_done += self.world.is_overlapping(self.ball, self.left_lim_area)
+
+        self._done = area_done
+
         return self._done
 
 
@@ -1266,6 +1273,9 @@ class Scenario(BaseScenario):
         inner_product_threshold = 0.9
         angular_velocity_threshold = 0.5
         release_attenuation = 0.1
+
+        release_attenuations = torch.zeros(self.world.batch_dim, device=self.world.device)
+        release_attenuations[:] = release_attenuation 
         
         for env_index in range(world.batch_dim):
             for i, agent in enumerate(world.agents):
@@ -1307,20 +1317,20 @@ class Scenario(BaseScenario):
                                                                     device=world.device)
                             ball.state.vel[env_index] += angular_velaocity_effect * release_attenuation
                             agent.state.dribble[env_index]= False
+                        if agent == self.blue_agents[0]:
+                            release_attenuations = release_attenuations * self.world.is_overlapping(self.red_agents[0], ball)
+                            if release_attenuations[env_index] > 0.0:
+                                ball.state.vel[env_index] = ball.state.vel[env_index] * -release_attenuations[env_index]
+                                self.blue_agents[0].state.dribble[env_index]= False
+                        elif agent == self.red_agents[0]:
+                            release_attenuations = release_attenuations * self.world.is_overlapping(self.blue_agents[0], ball)
+                            if release_attenuations[env_index] > 0.0:
+                                ball.state.vel[env_index] = ball.state.vel[env_index] * -release_attenuations[env_index]
+                                self.red_agents[0].state.dribble[env_index]= False
+                            # ball.state.vel[env_index] = ball.state.vel[env_index] * -release_attenuations[env_index]
+                            # self.red_agents[0].state.dribble[env_index]= False
 
-                        if self.blue_agents[0] and self.world.is_overlapping(self.red_agents[0], ball):
-                            angular_velaocity_effect = torch.tensor([agent.state.ang_vel[env_index] * -torch.sin(agent.state.rot[env_index]),
-                                                                    agent.state.ang_vel[env_index] * torch.cos(agent.state.rot[env_index])],
-                                                                    device=world.device)
-                            ball.state.vel[env_index] += angular_velaocity_effect * -release_attenuation
-                            agent.state.dribble[env_index]= False
-                        elif self.red_agents[0] and self.world.is_overlapping(self.blue_agents[0], ball):
-                            angular_velaocity_effect = torch.tensor([agent.state.ang_vel[env_index] * -torch.sin(agent.state.rot[env_index]),
-                                                                    agent.state.ang_vel[env_index] * torch.cos(agent.state.rot[env_index])],
-                                                                    device=world.device)
-                            ball.state.vel[env_index] += angular_velaocity_effect * -release_attenuation
-                            agent.state.dribble[env_index]= False
-
+# ---------------------------------------------------------------------------------------------------------
 
         # for i, agent in enumerate(world.agents):
         #     if "agent" in agent.name and agent.name != "Ball":
